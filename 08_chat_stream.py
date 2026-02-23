@@ -15,7 +15,8 @@ from contextlib import AsyncExitStack
 from google import genai
 from rich.console import Console
 from rich.markdown import Markdown
-from google_search import google_search, get_query_strings
+from rich.live import Live
+from google_search import google_search
 
 load_dotenv()
 client = genai.Client()
@@ -88,7 +89,7 @@ async def chat(
     else:
         history = None
     chat = client.aio.chats.create(
-        model="gemini-3-pro-preview",
+        model="gemini-2.5-pro",
         config=genai.types.GenerateContentConfig(
             tools=tools + sessions,
             system_instruction=(
@@ -104,17 +105,45 @@ async def chat(
         prompt = console.input("請輸入訊息(按 ⏎ 結束): ")  
         if prompt.strip() == "":
             break
-        response = await chat.send_message(prompt)
-        for hook in hooks:
-            hook(response)
+        async for response in await chat.send_message_stream(prompt):
+            for hook in hooks:
+                hook(response)
+        history = chat.get_history()
+        
     with open('resume.pkl', 'wb') as f:
-        pickle.dump(chat.get_history(), f)
+        pickle.dump(history, f)
+
+live: Live = None
+text: str = ""
 
 def show_text(response: genai.types.GenerateContentResponse):
-    console.print(Markdown(response.text))
+    global live, text
+    if not live:
+        live = Live(
+            Markdown(""),
+            console=console,
+            refresh_per_second=10,
+        )
+        live.start()
+    text += response.text or ""
+    live.update(Markdown(text))
+    candidates = response.candidates or []
+    if (
+        candidates[0].finish_reason == 
+        genai.types.FinishReason.STOP
+    ):
+        live.stop()
+        live = None
+        text = ""
 
+afc_len = 0
 def show_afc(response: genai.types.GenerateContentResponse):
-    for content in response.automatic_function_calling_history:
+    global afc_len
+    if not response.automatic_function_calling_history:
+        return
+    afc_history = response.automatic_function_calling_history[afc_len:]
+    afc_len = len(response.automatic_function_calling_history)
+    for content in afc_history:
         for part in content.parts:
             if part.function_call:
                 name = part.function_call.name

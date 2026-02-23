@@ -10,6 +10,8 @@ dotenv.load_dotenv()
 console = Console()
 client = genai.Client()
 
+# 測試前要先把 MCP 伺服器跑起來
+# & npx -y @modelcontextprotocol/server-everything sse &
 async def run_sse():
     # 建立連接 MCP 伺服器的用戶端
     # 根據 MCP 伺服器執行的訊息取得位址

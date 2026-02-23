@@ -3,6 +3,8 @@ import sys
 import json
 import asyncio
 import time
+import pickle
+from typing import Callable
 from dotenv import load_dotenv
 from mcp import ClientSession
 from mcp import StdioServerParameters
@@ -72,14 +74,25 @@ async def load_mcp():
         print(f"OK")
     return sessions
 
-async def chat(sessions: list[ClientSession]):
+async def chat(
+    sessions: list[ClientSession], 
+    hooks: list[
+        Callable[[genai.types.GenerateContentResponse], None]
+    ]
+):
+    if os.path.exists('resume.pkl'):
+        with open('resume.pkl', 'rb') as f:
+            history = pickle.load(f)
+    else:
+        history = []
     while True:
         prompt = console.input("請輸入訊息(按 ⏎ 結束): ")  
         if prompt.strip() == "":
             break
+        history.append(prompt)
         response = await client.aio.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
+            model="gemini-3-pro-preview",
+            contents=history,
             config=genai.types.GenerateContentConfig(
                 tools=sessions,
                 system_instruction=(
@@ -88,17 +101,42 @@ async def chat(sessions: list[ClientSession]):
                     "請使用繁體中文"
                     "以 Markdown 格式回覆"
                 )
-            ),
+            )
         )
-        console.print(Markdown(response.text))
+        for hook in hooks:
+            hook(response)
+        history.append(response.candidates[0].content)
+    with open('resume.pkl', 'wb') as f:
+        pickle.dump(history, f)
 
-# 若要使用 Brave search 需要先啟動 MCP 伺服器
-# npx -y @brave/brave-search-mcp-server ‵
-# --transport http --brave-api-key 你的金鑰 &
+def show_text(response: genai.types.GenerateContentResponse):
+    console.print(Markdown(response.text))
+
+def show_afc(response: genai.types.GenerateContentResponse):
+    if not response.automatic_function_calling_history:
+        return
+    for content in response.automatic_function_calling_history:
+        for part in content.parts:
+            if part.function_call:
+                name = part.function_call.name
+                args = part.function_call.args
+                console.log(
+                    f"使用 {name}(**{args})", 
+                    markup=False
+                )
+            # elif part.function_response:
+            #     name = part.function_response.name
+            #     response = part.function_response.response
+            #     console.print(
+            #         f"工具 {name} 的回應: {response}", 
+            #         markup=False
+            #     )
+
 async def main():
+    hooks = [show_afc, show_text]
     try:
         sessions = await load_mcp()
-        await chat(sessions)
+        await chat(sessions, hooks)
     except KeyboardInterrupt:
         print("使用者中斷")
     finally:

@@ -106,6 +106,8 @@ def show_text(response: genai.types.GenerateContentResponse):
     console.print(Markdown(response.text))
 
 def show_afc(response: genai.types.GenerateContentResponse):
+    if not response.automatic_function_calling_history:
+        return
     for content in response.automatic_function_calling_history:
         for part in content.parts:
             if part.function_call:

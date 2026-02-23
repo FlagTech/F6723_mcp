@@ -12,8 +12,16 @@ console = Console()
 client = genai.Client()
 import os
 
-# 取得當前使用者的桌面路徑 (跨平台)
 def get_desktop_path():
+    """
+    取得當前使用者的桌面路徑（跨平台）。
+
+    依序檢查常見的桌面資料夾名稱（Desktop、桌面），
+    若皆不存在則回傳使用者家目錄。
+
+    Returns:
+        str: 桌面路徑或家目錄路徑
+    """
     home = os.path.expanduser("~")
     # 常見平台的桌面名稱
     possible_names = ["Desktop", "桌面"]
@@ -44,13 +52,13 @@ async def run_stdio():
             await session.initialize()
 
             # 利用 MCP 伺服器提供的環境變數工具取得 PATH 變數內容
-            prompt = f"我的桌面上有哪些圖檔？"
+            prompt = f"我的桌面上（不含子資料夾）有哪些圖檔？"
             response = await client.aio.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=prompt,
                 config=genai.types.GenerateContentConfig(
                     temperature=0,
-                    tools=[session],
+                    tools=[get_desktop_path, session],
                     # 如下指定可停用自動叫用
                     # automatic_function_calling=(
                     #     genai.types.AutomaticFunctionCallingConfig(

@@ -3,6 +3,7 @@ import sys
 import json
 import asyncio
 import time
+import pickle
 from typing import Callable
 from dotenv import load_dotenv
 from mcp import ClientSession
@@ -14,6 +15,8 @@ from contextlib import AsyncExitStack
 from google import genai
 from rich.console import Console
 from rich.markdown import Markdown
+from rich.live import Live
+from google_search import google_search
 
 load_dotenv()
 client = genai.Client()
@@ -74,33 +77,68 @@ async def load_mcp():
     return sessions
 
 async def chat(
+    tools: list,
     sessions: list[ClientSession], 
     hooks: list[
         Callable[[genai.types.GenerateContentResponse], None]
     ]
 ):
+    if os.path.exists('resume.pkl'):
+        with open('resume.pkl', 'rb') as f:
+            history = pickle.load(f)
+    else:
+        history = []
     while True:
         prompt = console.input("請輸入訊息(按 ⏎ 結束): ")  
         if prompt.strip() == "":
             break
-        response = await client.aio.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=genai.types.GenerateContentConfig(
-                tools=sessions,
-                system_instruction=(
-                    f"現在 GMT 時間："
-                    f"{time.strftime("%c", time.gmtime())}\n"
-                    "請使用繁體中文"
-                    "以 Markdown 格式回覆"
+        history.append(prompt)
+        async for response in await (
+            client.aio.models.generate_content_stream(
+                # 目前 gemini-3 模型加上串流在 function calling 
+                # 會有問題，只會回覆空字串，而且可能會在下次
+                # 對談才真的呼叫工具
+                model="gemini-2.5-flash",
+                contents=history,
+                config=genai.types.GenerateContentConfig(
+                    tools=tools + sessions,
+                    system_instruction=(
+                        f"現在 GMT 時間："
+                        f"{time.strftime("%c", time.gmtime())}\n"
+                        "請使用繁體中文"
+                        "以 Markdown 格式回覆"
+                    )
                 )
-            ),
-        )
-        for hook in hooks:
-            hook(response)
+            )
+        ):
+            history.append(response.candidates[0].content)
+            for hook in hooks:
+                hook(response)
+    with open('resume.pkl', 'wb') as f:
+        pickle.dump(history, f)
+
+live: Live = None
+text: str = ""
 
 def show_text(response: genai.types.GenerateContentResponse):
-    console.print(Markdown(response.text))
+    global live, text
+    if not live:
+        live = Live(
+            Markdown(""),
+            console=console,
+            refresh_per_second=10,
+        )
+        live.start()
+    text += response.text or ""
+    live.update(Markdown(text))
+    candidates = response.candidates or []
+    if (
+        candidates[0].finish_reason == 
+        genai.types.FinishReason.STOP
+    ):
+        live.stop()
+        live = None
+        text = ""
 
 def show_afc(response: genai.types.GenerateContentResponse):
     if not response.automatic_function_calling_history:
@@ -124,9 +162,10 @@ def show_afc(response: genai.types.GenerateContentResponse):
 
 async def main():
     hooks = [show_afc, show_text]
+    tools = [google_search]
     try:
         sessions = await load_mcp()
-        await chat(sessions, hooks)
+        await chat(tools, sessions, hooks)
     except KeyboardInterrupt:
         print("使用者中斷")
     finally:

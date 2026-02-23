@@ -15,6 +15,7 @@ from contextlib import AsyncExitStack
 from google import genai
 from rich.console import Console
 from rich.markdown import Markdown
+from google_search import google_search
 
 load_dotenv()
 client = genai.Client()
@@ -75,6 +76,7 @@ async def load_mcp():
     return sessions
 
 async def chat(
+    tools: list,
     sessions: list[ClientSession], 
     hooks: list[
         Callable[[genai.types.GenerateContentResponse], None]
@@ -84,34 +86,37 @@ async def chat(
         with open('resume.pkl', 'rb') as f:
             history = pickle.load(f)
     else:
-        history = None
-    chat = client.aio.chats.create(
-        model="gemini-3-pro-preview",
-        config=genai.types.GenerateContentConfig(
-            tools=sessions,
-            system_instruction=(
-                f"現在 GMT 時間："
-                f"{time.strftime("%c", time.gmtime())}\n"
-                "請使用繁體中文"
-                "以 Markdown 格式回覆"
-            )
-        ),
-        history=history
-    )
+        history = []
     while True:
         prompt = console.input("請輸入訊息(按 ⏎ 結束): ")  
         if prompt.strip() == "":
             break
-        response = await chat.send_message(prompt)
+        history.append(prompt)
+        response = await client.aio.models.generate_content(
+            model="gemini-3-pro-preview",
+            contents=history,
+            config=genai.types.GenerateContentConfig(
+                tools=tools + sessions,
+                system_instruction=(
+                    f"現在 GMT 時間："
+                    f"{time.strftime("%c", time.gmtime())}\n"
+                    "請使用繁體中文"
+                    "以 Markdown 格式回覆"
+                )
+            )
+        )
         for hook in hooks:
             hook(response)
+        history.append(response.candidates[0].content)
     with open('resume.pkl', 'wb') as f:
-        pickle.dump(chat.get_history(), f)
+        pickle.dump(history, f)
 
 def show_text(response: genai.types.GenerateContentResponse):
     console.print(Markdown(response.text))
 
 def show_afc(response: genai.types.GenerateContentResponse):
+    if not response.automatic_function_calling_history:
+        return
     for content in response.automatic_function_calling_history:
         for part in content.parts:
             if part.function_call:
@@ -131,9 +136,10 @@ def show_afc(response: genai.types.GenerateContentResponse):
 
 async def main():
     hooks = [show_afc, show_text]
+    tools = [google_search]
     try:
         sessions = await load_mcp()
-        await chat(sessions, hooks)
+        await chat(tools, sessions, hooks)
     except KeyboardInterrupt:
         print("使用者中斷")
     finally:
