@@ -17,7 +17,7 @@ def google_search(query: str) -> str:
 
     # 範例使用：讓模型呼叫這個自訂搜尋工具
     response = client.models.generate_content(
-        model="models/gemini-3-pro-preview",
+        model="models/gemini-2.5-flash",
         config={
             "tools": [{"google_search": {}}],
             "system_instruction": "請用繁體中文回答"

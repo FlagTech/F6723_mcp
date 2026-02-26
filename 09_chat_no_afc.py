@@ -15,7 +15,7 @@ from google_search import google_search
 load_dotenv()
 client = genai.Client()
 console = Console()
-hist_file = "hist.pkl"
+hist_file = "chat_hist.pkl"
 
 async def chat(
     tools: list,
@@ -24,11 +24,30 @@ async def chat(
         Callable[[genai.types.GenerateContentResponse], None]
     ]
 ):
+    history = None
     if os.path.exists(hist_file):
+        console.print("接續對話")
         with open(hist_file, 'rb') as f:
             history = pickle.load(f)
-    else:
-        history = []
+
+    chat = client.aio.chats.create(
+        model="gemini-2.5-flash",
+        config=genai.types.GenerateContentConfig(
+            tools=tools + sessions,
+            system_instruction=(
+                f"現在 GMT 時間："
+                f"{time.strftime("%c", time.gmtime())}\n"
+                "請使用繁體中文"
+                "以 Markdown 格式回覆"
+            ),
+            automatic_function_calling=(
+                genai.types.AutomaticFunctionCallingConfig(
+                    disable=True
+                )
+            )
+        ),
+        history=history
+    )
     
     results = []
     while True:
@@ -36,57 +55,30 @@ async def chat(
             prompt = console.input("請輸入訊息(按 ⏎ 結束): ")  
             if prompt.strip() == "":
                 break
-            history.append(prompt)
-            contents = history + results
         else:
-            contents += results
-        text = ''
-        async for response in await (
-            client.aio.models.generate_content_stream(
-                model="gemini-2.5-flash",
-                contents=contents,
-                config=genai.types.GenerateContentConfig(
-                    tools=tools + sessions,
-                    system_instruction=(
-                        f"現在 GMT 時間："
-                        f"{time.strftime("%c", time.gmtime())}\n"
-                        "請使用繁體中文"
-                        "以 Markdown 格式回覆"
-                    ),
-                    automatic_function_calling=(
-                        genai.types.AutomaticFunctionCallingConfig(
-                            disable=True
-                        )
-                    ),
-                )
-            )
-        ):
+            prompt = results
+        async for response in await chat.send_message_stream(prompt):
             results = await call_functions(
                 response, 
-                tools, sessions
+                tools, sessions, include_original_response=False
             )
-            text += response.text or ""
+
             for hook in hooks:
                 hook(response)
-
-        if text:
-            history.append(
-                genai.types.Content(
-                    role="model",
-                    parts=[genai.types.Part(text=text)]
-                )
-            )
+    
+    history = chat.get_history()
 
     if history:
         with open(hist_file, 'wb') as f:
             pickle.dump(history, f)
-
 
 live: Live = None
 text: str = ""
 
 def show_text(response: genai.types.GenerateContentResponse):
     global live, text
+    if not response.text:
+        return
     if not live:
         live = Live(
             Markdown(""),
@@ -94,7 +86,7 @@ def show_text(response: genai.types.GenerateContentResponse):
             refresh_per_second=10,
         )
         live.start()
-    text += response.text or ""
+    text += response.text
     live.update(Markdown(text))
     candidates = response.candidates or []
     if (
@@ -125,6 +117,6 @@ async def main():
         console.print(f"[red]錯誤: {e}[/red]")
     finally:
         await close_mcp()
-        print("程式結束")
+        console.print("程式結束")
 
 asyncio.run(main())
