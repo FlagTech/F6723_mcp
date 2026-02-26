@@ -42,6 +42,7 @@ async def chat(
 
         if response.text:
             history.append(
+                # genai.types.ModelContent(response.text)
                 genai.types.Content(
                     role="model",
                     parts=[genai.types.Part(text=response.text)]
