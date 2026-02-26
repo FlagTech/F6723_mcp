@@ -72,13 +72,11 @@ async def chat(
         with open(hist_file, 'wb') as f:
             pickle.dump(history, f)
 
-live: Live = None
+live: Live | None = None
 text: str = ""
 
 def show_text(response: genai.types.GenerateContentResponse):
     global live, text
-    if not response.text:
-        return
     if not live:
         live = Live(
             Markdown(""),
@@ -86,7 +84,7 @@ def show_text(response: genai.types.GenerateContentResponse):
             refresh_per_second=10,
         )
         live.start()
-    text += response.text
+    text += response.text or ""
     live.update(Markdown(text))
     candidates = response.candidates or []
     if (

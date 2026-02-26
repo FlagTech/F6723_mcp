@@ -82,7 +82,7 @@ async def chat(
             pickle.dump(history, f)
 
 
-live: Live = None
+live: Live | None = None
 text: str = ""
 
 def show_text(response: genai.types.GenerateContentResponse):
