@@ -50,13 +50,7 @@ async def chat(
         for hook in hooks:
             hook(response)
 
-        if response.text:
-            history.append(
-                genai.types.Content(
-                    role="model",
-                    parts=[genai.types.Part(text=response.text)]
-                )
-            )
+        history.append(response.candidates[0].content)
  
     if history:
         with open(hist_file, 'wb') as f:

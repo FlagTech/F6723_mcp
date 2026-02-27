@@ -59,13 +59,8 @@ async def chat(
             for hook in hooks:
                 hook(response)
 
-        if response.text:
-            history.append(
-                genai.types.Content(
-                    role="model",
-                    parts=[genai.types.Part(text=response.text)]
-                )
-            )
+            history.append(response.candidates[0].content)
+
 
     if history:
         with open(hist_file, 'wb') as f:
@@ -95,6 +90,12 @@ def show_text(response: genai.types.GenerateContentResponse):
         text = ""
 
 def show_afc(response: genai.types.GenerateContentResponse):
+    candidates = response.candidates or []
+    if (
+        not candidates[0].finish_reason == 
+        genai.types.FinishReason.STOP
+    ):
+        return
     if not response.automatic_function_calling_history:
         return
     for content in response.automatic_function_calling_history:

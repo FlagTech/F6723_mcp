@@ -16,7 +16,12 @@ from google_search import google_search
 load_dotenv()
 client = genai.Client()
 console = Console()
+afc_len = 0
 hist_file = "chat_hist.pkl"
+
+def set_afc_len(history:list[genai.types.Content]) -> int:
+    global afc_len
+    afc_len = len(history)
 
 async def chat(
     tools: list,
@@ -29,6 +34,7 @@ async def chat(
         console.print("接續對話")
         with open(hist_file, 'rb') as f:
             history = pickle.load(f)
+            set_afc_len(history)
     else:
         history = None
 
@@ -64,14 +70,18 @@ def show_text(response: genai.types.GenerateContentResponse):
     console.print(Markdown(response.text))
 
 def show_afc(response: genai.types.GenerateContentResponse):
+    global afc_len
     if not response.automatic_function_calling_history:
         return
-    for content in response.automatic_function_calling_history:
+    for content in (
+        response.automatic_function_calling_history[afc_len:]
+    ):
         for part in content.parts:
             if part.function_call:
                 name = part.function_call.name
                 args = part.function_call.args
                 console.print(f" →{name}(**{args})")
+    afc_len = len(response.automatic_function_calling_history)
 
 async def main():
     hooks = [show_afc, show_text]

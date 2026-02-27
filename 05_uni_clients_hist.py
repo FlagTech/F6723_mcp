@@ -40,14 +40,7 @@ async def chat(
         for hook in hooks:
             hook(response)
 
-        if response.text:
-            history.append(
-                # genai.types.ModelContent(response.text)
-                genai.types.Content(
-                    role="model",
-                    parts=[genai.types.Part(text=response.text)]
-                )
-            )
+        history.append(response.candidates[0].content)
 
 def show_text(response: genai.types.GenerateContentResponse):
     if response.text:
