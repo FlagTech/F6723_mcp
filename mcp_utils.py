@@ -9,11 +9,17 @@ from mcp.client.streamable_http import streamable_http_client
 from contextlib import AsyncExitStack
 from typing import Callable
 from google import genai
+import httpx
 
 async_exit_stack = AsyncExitStack()
 
 async def get_remote_mcp_session(info:dict) -> ClientSession:
     if info.pop("type", None) == "http":
+        # 如果有 headers，要客製 HTTP 用戶端物件(參考 4-6 節)
+        if "headers" in info:
+            headers = info.pop("headers")
+            async_client = httpx.AsyncClient(headers=headers)
+            info["http_client"] = async_client
         read, write, _ = (
             await async_exit_stack.enter_async_context(
                 streamable_http_client(**info)
