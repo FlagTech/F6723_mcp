@@ -22,6 +22,13 @@
       ],
       "env": {
         "BRAVE_API_KEY": "BSAxAwP4IxG1WMqmnQ0gO2u1PdnEUXv"
+      },
+      "Bitly": {
+        "type": "http",
+        "url": "https://api-ssl.bitly.com/v4/mcp",
+        "headers": {
+          "Authorization": "Bearer <你的存取權杖>"
+        }
       }
     }
   }
