@@ -8,7 +8,8 @@
       ]
     },
     "openclaw Docs": {
-      "url": "https://gitmcp.io/openclaw/openclaw"
+      "url": "https://gitmcp.io/openclaw/openclaw",
+      "sse_read_timeout": 600
     },
     "brave-search": {
       "type": "http",
