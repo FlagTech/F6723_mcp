@@ -53,7 +53,8 @@ async def chat(
                         "以 Markdown 格式回覆"
                     ),
                     automatic_function_calling=(
-                        genai.types.AutomaticFunctionCallingConfig(
+                        genai.types.
+                        AutomaticFunctionCallingConfig(
                             disable=True
                         )
                     ),
