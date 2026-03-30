@@ -10,7 +10,7 @@ dotenv.load_dotenv()
 console = Console()
 client = genai.Client()
 
-async def run_sse():
+async def run_streamable_http():
     async with streamable_http_client(
         url="http://localhost:8080/mcp"
     ) as (read, write, _):
@@ -18,7 +18,7 @@ async def run_sse():
             # 連接 MCP 服器
             await session.initialize()
 
-            prompt = f"WBC 中華隊備戰狀況？"
+            prompt = f"徒手爬 101 的是誰？"
             response = await client.aio.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=prompt,
@@ -28,4 +28,4 @@ async def run_sse():
             )
             console.print(Markdown(response.text))
 
-asyncio.run(run_sse())
+asyncio.run(run_streamable_http())
