@@ -57,13 +57,16 @@ async def chat(
                 break
         else:
             prompt = results
-        async for response in await chat.send_message_stream(prompt):
+        async for response in await chat.send_message_stream(
+            prompt
+        ):
             for hook in hooks:
                 hook(response)
     
             results = await call_functions(
                 response, 
-                tools, sessions, include_original_response=False
+                tools, sessions, 
+                include_original_response=False
             )
 
     history = chat.get_history()
